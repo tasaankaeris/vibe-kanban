@@ -9,6 +9,16 @@ Two images are published to GHCR:
 
 This is **not** Bloop’s hosted cloud. Nothing is sent to `vibekanban.com` unless you configure that yourself.
 
+## Publishing images (tag only)
+
+GHCR images are **only** pushed when a `v*` **git tag** exists (via **Actions → Create pre-release tag**, or a manual tag push that triggers CI). Branch merges and PRs build in CI but do **not** publish to GHCR.
+
+1. Run **Create pre-release tag** (`tag_only` or `fork_patch`) on `release/…` — this creates e.g. `v0.1.43-fork.1-20260528180301` and starts **Docker GHCR** on that tag.
+2. Set `IMAGE_TAG` in `deploy/.env` to that **exact tag name** (without `ghcr.io/…` prefix).
+3. `docker compose … pull` then `up`.
+
+To rebuild an existing tag without a new commit: **Create pre-release tag** → `publish_existing` with that tag name.
+
 ## How it works locally (no Bloop SaaS)
 
 ```text
@@ -42,7 +52,7 @@ Upstream product name says “kanban”; the board UI is backed by **cloud**, no
 
 ```bash
 cp deploy/.env.example deploy/.env
-# Edit: VIBEKANBAN_REMOTE_JWT_SECRET, ELECTRIC_ROLE_PASSWORD, SELF_HOST_* or OAuth
+# Edit: IMAGE_TAG (git tag from pre-release workflow), secrets, SELF_HOST_* or OAuth
 
 docker login ghcr.io
 mkdir -p deploy/repos   # git projects mounted into the local container
