@@ -1,3 +1,6 @@
+# Publishes to GHCR only on version git tags (v*). PRs build without push to avoid
+# storage charges from branch/SHA images. After Create pre-release tag, use
+# publish_existing or rely on gh workflow run docker-ghcr.yml --ref <tag>.
 name: Docker GHCR
 
 on:
@@ -9,9 +12,6 @@ on:
       - '**/*.md'
       - 'docs/**'
   push:
-    branches:
-      - main
-      - 'release/**'
     tags:
       - 'v*'
   workflow_dispatch:
@@ -57,6 +57,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Require version tag for publish
+        if: github.event_name != 'pull_request'
+        run: |
+          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
+            echo "GHCR publish only runs on git tags matching v* (e.g. v0.1.43-fork.1-20260528180301)." >&2
+            echo "Create a tag via Create pre-release tag, or run this workflow with --ref <tag>." >&2
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -70,16 +79,12 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
+        if: github.event_name != 'pull_request'
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{version}}-{{prerelease}}
-            type=sha,prefix=
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -89,6 +94,17 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=${{ matrix.id }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.id }}
+
+      - name: Build Docker image (PR validation only)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
           build-args: ${{ matrix.build-args }}
           cache-from: type=gha,scope=${{ matrix.id }}
           cache-to: type=gha,mode=max,scope=${{ matrix.id }}
