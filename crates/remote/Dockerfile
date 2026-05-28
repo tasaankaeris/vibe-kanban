@@ -95,11 +95,16 @@ RUN if [ -z "${FEATURES}" ]; then \
       rm -f crates/remote/Cargo.lock; \
     fi
 
+# SSH mount is only required when building with vk-billing (private git dep). Self-hosted
+# builds use FEATURES= and strip billing in the RUN above.
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=remote-target,target=/app/target \
-    --mount=type=ssh \
-    cargo build ${FEATURES:+--locked} --release --manifest-path crates/remote/Cargo.toml ${FEATURES:+--features ${FEATURES}} \
+    sh -ec 'if [ -n "${FEATURES}" ]; then \
+      cargo build --locked --release --manifest-path crates/remote/Cargo.toml --features "${FEATURES}"; \
+    else \
+      cargo build --release --manifest-path crates/remote/Cargo.toml; \
+    fi' \
  && cp /app/target/release/${APP_NAME} /app/bin/${APP_NAME}
 
 FROM debian:bookworm-slim AS runtime

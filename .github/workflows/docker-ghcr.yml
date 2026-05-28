@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: docker-ghcr-${{ github.workflow }}-${{ github.ref }}
+  group: docker-ghcr-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -26,11 +26,34 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/vibe-kanban
 
 jobs:
   build-and-push:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: local
+            name: local (agent server)
+            image: vibe-kanban
+            dockerfile: ./Dockerfile
+            build-args: |
+              POSTHOG_API_KEY=
+              POSTHOG_API_ENDPOINT=
+              SENTRY_DSN=
+          - id: cloud
+            name: cloud (projects + kanban API)
+            image: vibe-kanban-cloud
+            dockerfile: ./crates/remote/Dockerfile
+            build-args: |
+              FEATURES=
+              POSTHOG_API_KEY=
+              POSTHOG_API_ENDPOINT=
+              SENTRY_DSN_REMOTE=
+              VITE_RELAY_API_BASE_URL=http://localhost:8082
+              VITE_PUBLIC_REACT_VIRTUOSO_LICENSE_KEY=
     steps:
       - uses: actions/checkout@v6
 
@@ -49,7 +72,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -62,9 +85,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=${{ matrix.id }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.id }}
