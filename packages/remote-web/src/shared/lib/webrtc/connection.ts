@@ -12,6 +12,7 @@ import type {
 import { bytesToBase64 } from "@remote/shared/lib/relay/bytes";
 import { requestRelayHostApi } from "@remote/shared/lib/relayHostApi";
 import { Defragmenter, fragment } from "./chunking";
+import { safeUUID } from "@/shared/lib/uuid";
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 const TEXT_ENCODER = new TextEncoder();
@@ -98,7 +99,7 @@ export class WebRtcConnection {
     await pc.setLocalDescription(offer);
     await gatheringDone;
 
-    const sessionId = crypto.randomUUID();
+    const sessionId = safeUUID();
     const offerSdp = pc.localDescription!.sdp;
 
     const sdpOffer: SdpOffer = { sdp: offerSdp, session_id: sessionId };
@@ -147,7 +148,7 @@ export class WebRtcConnection {
       return Promise.reject(new Error("WebRTC not connected"));
     }
 
-    const id = crypto.randomUUID();
+    const id = safeUUID();
     const bodyB64 = body ? bytesToBase64(body) : undefined;
 
     const msg: DataChannelMessage = {
@@ -184,7 +185,7 @@ export class WebRtcConnection {
       return Promise.reject(new Error("WebRTC not connected"));
     }
 
-    const connId = crypto.randomUUID();
+    const connId = safeUUID();
     this.activeWs.set(connId, handlers);
 
     const msg: DataChannelMessage = {

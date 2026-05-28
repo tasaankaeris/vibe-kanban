@@ -7,6 +7,7 @@ import type {
   StartSpake2EnrollmentResponse,
 } from 'shared/types';
 import { getAuthRuntime } from '@/shared/lib/auth/runtime';
+import { assertRelayAvailable } from '@/shared/lib/relayCapability';
 
 export interface RelaySigningSessionRefreshPayload {
   client_id: string;
@@ -40,6 +41,7 @@ export function syncRelayApiBaseWithRemote(base: string | null | undefined) {
 export async function createRemoteSession(
   hostId: string
 ): Promise<CreateRemoteSessionResponse> {
+  assertRelayAvailable();
   const response = await makeAuthenticatedRequest(
     getRelayApiUrl(),
     `/v1/relay/create/${hostId}`,
@@ -68,6 +70,7 @@ export async function startRelaySpake2Enrollment(
   sessionId: string,
   payload: StartSpake2EnrollmentRequest
 ): Promise<StartSpake2EnrollmentResponse> {
+  assertRelayAvailable();
   const response = await makeAuthenticatedRelaySessionRequest(
     hostId,
     sessionId,
@@ -83,6 +86,7 @@ export async function finishRelaySpake2Enrollment(
   sessionId: string,
   payload: FinishSpake2EnrollmentRequest
 ): Promise<FinishSpake2EnrollmentResponse> {
+  assertRelayAvailable();
   const response = await makeAuthenticatedRelaySessionRequest(
     hostId,
     sessionId,
@@ -98,6 +102,7 @@ export async function refreshRelaySigningSession(
   sessionId: string,
   payload: RelaySigningSessionRefreshPayload
 ): Promise<RefreshRelaySigningSessionResponse> {
+  assertRelayAvailable();
   const response = await makeAuthenticatedRelaySessionRequest(
     hostId,
     sessionId,

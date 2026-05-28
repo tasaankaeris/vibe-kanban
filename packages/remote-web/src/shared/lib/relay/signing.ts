@@ -1,4 +1,5 @@
 import type { PairedRelayHost } from "@/shared/lib/relayPairingStorage";
+import { safeUUID } from "@/shared/lib/uuid";
 
 import {
   bytesToBase64,
@@ -59,7 +60,7 @@ export async function buildRelaySignature(
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const nonce = crypto.randomUUID();
+  const nonce = safeUUID();
   const bodyHashB64 = await sha256Base64(bodyBytes);
 
   const message = [

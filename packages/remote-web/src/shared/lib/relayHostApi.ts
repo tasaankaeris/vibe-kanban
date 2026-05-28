@@ -26,6 +26,7 @@ import {
   createRelayWsSigningContext,
 } from "@remote/shared/lib/relay/ws";
 import { buildRemoteSessionBaseUrl } from "@/shared/lib/relayBackendApi";
+import { assertRelayAvailable } from "@/shared/lib/relayCapability";
 import type {
   LocalApiRequestOptions,
   LocalApiWebSocketOptions,
@@ -51,6 +52,8 @@ export async function requestLocalApiViaRelay(
     return fetch(pathOrUrl, relayRequestInit);
   }
 
+  assertRelayAvailable();
+
   const hostId =
     relayHostId ?? resolveRelayHostIdForCurrentPage() ?? getActiveRelayHostId();
   if (!hostId) {
@@ -72,6 +75,8 @@ export async function openLocalApiWebSocketViaRelay(
     return openBrowserWebSocket(pathOrUrl);
   }
 
+  assertRelayAvailable();
+
   const hostId =
     options.relayHostId ??
     resolveRelayHostIdForCurrentPage() ??
@@ -90,6 +95,7 @@ export async function requestRelayHostApi(
   pathOrUrl: string,
   requestInit: RequestInit = {},
 ): Promise<Response> {
+  assertRelayAvailable();
   const pathAndQuery = toPathAndQuery(pathOrUrl);
   const normalizedPath = normalizePath(pathAndQuery);
   const method = (requestInit.method ?? "GET").toUpperCase();
@@ -136,6 +142,7 @@ export async function openRelayHostWebSocket(
   hostId: string,
   pathOrUrl: string,
 ): Promise<WebSocket> {
+  assertRelayAvailable();
   const baseContext = await resolveRemoteHostContext(hostId);
   const context =
     (await tryRefreshRelayHostSigningSession(baseContext)) ?? baseContext;
