@@ -1,18 +1,26 @@
 # Fork pre-releases: tags look like upstream (version + UTC timestamp) but the
 # version is a fork patch (e.g. 0.1.43-fork.1), not an upstream v0.1.43 release.
+#
+# Note: git pushes using GITHUB_TOKEN do not trigger other workflows. After
+# creating a tag, this workflow explicitly starts Docker GHCR and Pre-release on tag.
 name: Create pre-release tag
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'tag_only = stamp current fork version; fork_patch = bump fork.N then tag'
+        description: 'tag_only | fork_patch | publish_existing (Docker + GH release only)'
         required: true
         default: tag_only
         type: choice
         options:
           - tag_only
           - fork_patch
+          - publish_existing
+      existing_tag:
+        description: 'Required for publish_existing (e.g. v0.1.43-fork.1-20260528161343)'
+        required: false
+        type: string
 
 concurrency:
   group: pre-release-tag-${{ github.ref_name }}
@@ -20,16 +28,17 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   tag:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        if: inputs.action != 'publish_existing'
 
       - name: Setup Node
+        if: inputs.action != 'publish_existing'
         uses: ./.github/actions/setup-node
 
       - name: Install cargo-edit
@@ -41,6 +50,7 @@ jobs:
           rev: 96a3879fe3bafda6d0f943b642997fbf03e235cd # v0.13.9
 
       - name: Read fork version metadata
+        if: inputs.action != 'publish_existing'
         id: fork
         run: |
           set -euo pipefail
@@ -54,6 +64,7 @@ jobs:
           echo "Current fork version: $current"
 
       - name: Determine version and tag name
+        if: inputs.action != 'publish_existing'
         id: version
         env:
           UPSTREAM_BASE: ${{ steps.fork.outputs.upstream_base }}
@@ -113,6 +124,7 @@ jobs:
           "
 
       - name: Commit, tag, and push
+        if: inputs.action != 'publish_existing'
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
@@ -130,3 +142,30 @@ jobs:
 
           git push origin HEAD
           git push origin "$new_tag"
+
+      - name: Resolve release tag
+        id: release
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.action }}" == "publish_existing" ]]; then
+            tag="${{ inputs.existing_tag }}"
+            if [[ -z "$tag" ]]; then
+              echo "existing_tag is required when action is publish_existing" >&2
+              exit 1
+            fi
+          else
+            tag="${{ steps.version.outputs.new_tag }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $tag"
+
+      - name: Trigger Docker image build and GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          echo "Starting Docker GHCR for $tag"
+          gh workflow run docker-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
+          echo "Starting Pre-release on tag for $tag"
+          gh workflow run release-on-tag.yml --repo "$GITHUB_REPOSITORY" --ref "$tag" -f "tag=$tag"
