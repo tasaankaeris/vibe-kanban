@@ -1,0 +1,121 @@
+# Self-hosted Vibe Kanban (no Bloop SaaS): pull published GHCR images.
+#
+#   cloud  → projects, kanban boards, issues, auth (Postgres + ElectricSQL)
+#   local  → agent workspaces; talks to cloud via VK_SHARED_API_BASE
+#
+# Usage (from repo root):
+#   cp deploy/.env.example deploy/.env   # edit secrets
+#   docker compose --env-file deploy/.env -f deploy/docker-compose.ghcr.yml up -d
+#
+# Open http://localhost:${LOCAL_PORT:-3001} for the full local UI (boards + workspaces).
+# Cloud API/UI is also on http://localhost:${CLOUD_PORT:-3000}.
+
+services:
+  remote-db:
+    image: postgres:16-alpine
+    command: ['postgres', '-c', 'wal_level=logical']
+    environment:
+      POSTGRES_DB: remote
+      POSTGRES_USER: remote
+      POSTGRES_PASSWORD: remote
+    volumes:
+      - remote-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U remote -d remote']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  cloud:
+    image: ghcr.io/${GHCR_OWNER}/vibe-kanban-cloud:${IMAGE_TAG}
+    depends_on:
+      remote-db:
+        condition: service_healthy
+    environment:
+      RUST_LOG: info,remote=info
+      SERVER_DATABASE_URL: postgres://remote:remote@remote-db:5432/remote
+      SERVER_LISTEN_ADDR: 0.0.0.0:8081
+      ELECTRIC_URL: http://electric:3000
+      ELECTRIC_ROLE_PASSWORD: ${ELECTRIC_ROLE_PASSWORD}
+      SERVER_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      VIBEKANBAN_REMOTE_JWT_SECRET: ${VIBEKANBAN_REMOTE_JWT_SECRET:?set VIBEKANBAN_REMOTE_JWT_SECRET}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      SELF_HOST_LOCAL_AUTH_EMAIL: ${SELF_HOST_LOCAL_AUTH_EMAIL:-}
+      SELF_HOST_LOCAL_AUTH_PASSWORD: ${SELF_HOST_LOCAL_AUTH_PASSWORD:-}
+    ports:
+      - '${CLOUD_PORT:-3000}:8081'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--spider',
+          '-q',
+          'http://127.0.0.1:8081/v1/health',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  electric:
+    image: electricsql/electric:1.4.13
+    working_dir: /app
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql://electric_sync:${ELECTRIC_ROLE_PASSWORD}@remote-db:5432/remote?sslmode=disable
+      PG_PROXY_PORT: 65432
+      LOGICAL_PUBLISHER_HOST: electric
+      AUTH_MODE: insecure
+      ELECTRIC_INSECURE: true
+      ELECTRIC_MANUAL_TABLE_PUBLISHING: true
+      ELECTRIC_USAGE_REPORTING: false
+      ELECTRIC_FEATURE_FLAGS: allow_subqueries,tagged_subqueries
+    volumes:
+      - electric-data:/app/persistent
+    depends_on:
+      remote-db:
+        condition: service_healthy
+      cloud:
+        condition: service_healthy
+
+  local:
+    image: ghcr.io/${GHCR_OWNER}/vibe-kanban:${IMAGE_TAG}
+    depends_on:
+      cloud:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      RUST_LOG: info
+      VK_SHARED_API_BASE: http://cloud:8081
+      VK_ALLOWED_ORIGINS: ${LOCAL_ALLOWED_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
+    volumes:
+      - ./repos:/repos
+      - vk-local-data:/home/appuser/.local/share/vibe-kanban
+    ports:
+      - '${LOCAL_PORT:-3001}:3000'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--spider',
+          '-q',
+          'http://127.0.0.1:3000/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  remote-db-data:
+  electric-data:
+  vk-local-data:
