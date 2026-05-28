@@ -5,6 +5,7 @@ import { useSyncErrorContext } from '@/shared/hooks/useSyncErrorContext';
 import type { MutationDefinition, ShapeDefinition } from 'shared/remote-types';
 import type { SyncError } from '@/shared/lib/electric/types';
 import type { MutationResult, InsertResult } from '@/shared/lib/electric/types';
+import { safeUUID } from '@/shared/lib/uuid';
 
 // Type helpers for extracting types from MutationDefinition
 type MutationCreateType<M> =
@@ -181,7 +182,7 @@ export function useShape<
   const insert = useCallback(
     (insertData: unknown): InsertResult<T> => {
       const dataWithId = {
-        id: crypto.randomUUID(),
+        id: safeUUID(),
         ...(insertData as Record<string, unknown>),
       };
       if (!typedCollection) {

@@ -1,3 +1,5 @@
+import { safeUUID } from '@/shared/lib/uuid';
+
 export interface RelayClientIdentity {
   clientId: string;
   clientName: string;
@@ -14,7 +16,7 @@ export function createRelayClientIdentity(): RelayClientIdentity {
   const clientName = `${clientBrowser} on ${clientOs} (${toTitleCase(clientDevice)})`;
 
   return {
-    clientId: crypto.randomUUID(),
+    clientId: safeUUID(),
     clientName,
     clientBrowser,
     clientOs,

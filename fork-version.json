@@ -1,0 +1,5 @@
+{
+  "upstreamBase": "0.1.43",
+  "forkPreid": "fork",
+  "description": "upstreamBase is the upstream release this fork is patched from; package.json version is upstreamBase-fork.N (not an upstream release)."
+}

@@ -21,6 +21,10 @@ import { useAppRuntime } from '@/shared/hooks/useAppRuntime';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { useAuth } from '@/shared/hooks/auth/useAuth';
 import { relayApi } from '@/shared/lib/api';
+import {
+  isRelayAvailable,
+  RELAY_REQUIRES_SECURE_CONTEXT_MESSAGE,
+} from '@/shared/lib/relayCapability';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
 import {
   SettingsCard,
@@ -63,12 +67,18 @@ export function RelaySettingsSectionContent({
   );
 }
 
+function RelayUnavailableNotice() {
+  return <InlineNotice>{RELAY_REQUIRES_SECURE_CONTEXT_MESSAGE}</InlineNotice>;
+}
+
 function RelayRoleChooser({
   selectedRole,
   onSelect,
+  disabled = false,
 }: {
   selectedRole: RelayRole | null;
   onSelect: (role: RelayRole) => void;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation(['settings']);
 
@@ -77,6 +87,7 @@ function RelayRoleChooser({
       <RelayRoleChoice
         role="host"
         selected={selectedRole === 'host'}
+        disabled={disabled}
         icon={<BroadcastIcon className="size-icon-sm" weight="bold" />}
         label={t('settings.relay.host.label', 'Host')}
         description={t(
@@ -88,6 +99,7 @@ function RelayRoleChooser({
       <RelayRoleChoice
         role="client"
         selected={selectedRole === 'client'}
+        disabled={disabled}
         icon={<DesktopIcon className="size-icon-sm" weight="bold" />}
         label={t('settings.relay.client.label', 'Client')}
         description={t(
@@ -103,6 +115,7 @@ function RelayRoleChooser({
 function RelayRoleChoice({
   role,
   selected,
+  disabled = false,
   icon,
   label,
   description,
@@ -110,6 +123,7 @@ function RelayRoleChoice({
 }: {
   role: RelayRole;
   selected: boolean;
+  disabled?: boolean;
   icon: ReactNode;
   label: string;
   description: string;
@@ -119,8 +133,11 @@ function RelayRoleChoice({
     <button
       type="button"
       onClick={() => onSelect(role)}
+      disabled={disabled}
       className={
-        selected
+        disabled
+          ? 'flex w-full flex-col items-start gap-2 rounded-sm border border-border bg-panel p-4 text-left opacity-60 cursor-not-allowed'
+          : selected
           ? 'flex w-full flex-col items-start gap-2 rounded-sm border border-brand/40 bg-brand/10 p-4 text-left transition-colors'
           : 'flex w-full flex-col items-start gap-2 rounded-sm border border-border bg-panel p-4 text-left transition-colors hover:border-brand/30 hover:bg-secondary/20'
       }
@@ -196,6 +213,7 @@ function LocalRelaySettingsSectionContent({
   const { config, loading, updateAndSaveConfig } = userSystem;
   const { isSignedIn } = useAuth();
   const queryClient = useQueryClient();
+  const relayAvailable = isRelayAvailable();
 
   const [draft, setDraft] = useState(() => (config ? cloneDeep(config) : null));
   const [dirty, setDirty] = useState(false);
@@ -217,7 +235,7 @@ function LocalRelaySettingsSectionContent({
   } = useQuery({
     queryKey: RELAY_PAIRED_CLIENTS_QUERY_KEY,
     queryFn: () => relayApi.listPairedClients(),
-    enabled: isSignedIn && (draft?.relay_enabled ?? false),
+    enabled: relayAvailable && isSignedIn && (draft?.relay_enabled ?? false),
     refetchInterval: 10000,
   });
 
@@ -332,9 +350,12 @@ function LocalRelaySettingsSectionContent({
 
   return (
     <div className="space-y-8">
+      {!relayAvailable && <RelayUnavailableNotice />}
+
       <RelayRoleChooser
         selectedRole={selectedRole}
         onSelect={(role) => setSelectedRole(role)}
+        disabled={!relayAvailable}
       />
 
       {error && (
@@ -349,7 +370,7 @@ function LocalRelaySettingsSectionContent({
         </div>
       )}
 
-      {selectedRole === 'host' && (
+      {selectedRole === 'host' && relayAvailable && (
         <SettingsCard
           title={t('settings.relay.host.title', 'Accept incoming connections')}
           headerAction={
@@ -589,18 +610,23 @@ function LocalRelaySettingsSectionContent({
         <SettingsCard
           title={t('settings.relay.client.panelTitle', 'Connect to a host')}
           headerAction={
-            <a
-              href={RELAY_REMOTE_CONTROL_DOCS_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-brand hover:underline"
-            >
-              {t('settings.relay.docsLink', 'Read docs')}
-            </a>
+            relayAvailable ? (
+              <a
+                href={RELAY_REMOTE_CONTROL_DOCS_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-brand hover:underline"
+              >
+                {t('settings.relay.docsLink', 'Read docs')}
+              </a>
+            ) : undefined
           }
         >
+          {!relayAvailable && <RelayUnavailableNotice />}
           {isSignedIn ? (
-            <RemoteCloudHostsSettingsCardContent onClose={onClose} />
+            relayAvailable ? (
+              <RemoteCloudHostsSettingsCardContent onClose={onClose} />
+            ) : null
           ) : (
             <SignInPrompt />
           )}
@@ -626,6 +652,7 @@ function RemoteRelaySettingsSectionContent({
 }) {
   const { t } = useTranslation(['settings']);
   const { isSignedIn } = useAuth();
+  const relayAvailable = isRelayAvailable();
 
   if (!isSignedIn) {
     return (
@@ -637,6 +664,20 @@ function RemoteRelaySettingsSectionContent({
         )}
       >
         <SignInPrompt />
+      </SettingsCard>
+    );
+  }
+
+  if (!relayAvailable) {
+    return (
+      <SettingsCard
+        title={t('settings.relay.client.title', 'Connect to a host')}
+        description={t(
+          'settings.relay.client.description',
+          'Control workspaces on another device by pairing to it with a one-time code.'
+        )}
+      >
+        <RelayUnavailableNotice />
       </SettingsCard>
     );
   }

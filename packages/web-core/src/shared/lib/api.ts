@@ -107,6 +107,7 @@ import { createWorkspaceWithSession } from '@/shared/types/attempt';
 import { resolveHostRequestScope } from '@/shared/lib/hostRequestScope';
 import { makeRequest as makeRemoteRequest } from '@/shared/lib/remoteApi';
 import { makeLocalApiRequest } from '@/shared/lib/localApiTransport';
+import { assertRelayAvailable } from '@/shared/lib/relayCapability';
 
 export class ApiError<E = unknown> extends Error {
   public status?: number;
@@ -1594,6 +1595,7 @@ export const queueApi = {
 // Relay API
 export const relayApi = {
   getEnrollmentCode: async (): Promise<{ enrollment_code: string }> => {
+    assertRelayAvailable();
     const response = await makeRequest(
       '/api/relay-auth/server/enrollment-code',
       {
@@ -1604,6 +1606,7 @@ export const relayApi = {
   },
 
   listPairedClients: async (): Promise<RelayPairedClient[]> => {
+    assertRelayAvailable();
     const response = await makeRequest('/api/relay-auth/server/clients');
     const body =
       await handleApiResponse<ListRelayPairedClientsResponse>(response);
@@ -1613,6 +1616,7 @@ export const relayApi = {
   removePairedClient: async (
     clientId: string
   ): Promise<RemoveRelayPairedClientResponse> => {
+    assertRelayAvailable();
     const response = await makeRequest(
       `/api/relay-auth/server/clients/${encodeURIComponent(clientId)}`,
       {
@@ -1625,6 +1629,7 @@ export const relayApi = {
   pairRelayHost: async (
     payload: PairRelayHostRequest
   ): Promise<PairRelayHostResponse> => {
+    assertRelayAvailable();
     const response = await makeRequest('/api/relay-auth/client/pair', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -1633,6 +1638,7 @@ export const relayApi = {
   },
 
   listPairedRelayHosts: async (): Promise<RelayPairedHost[]> => {
+    assertRelayAvailable();
     const response = await makeRequest('/api/relay-auth/client/hosts');
     const body =
       await handleApiResponse<ListRelayPairedHostsResponse>(response);
@@ -1642,6 +1648,7 @@ export const relayApi = {
   removePairedRelayHost: async (
     hostId: string
   ): Promise<RemoveRelayPairedHostResponse> => {
+    assertRelayAvailable();
     const response = await makeRequest(
       `/api/relay-auth/client/hosts/${encodeURIComponent(hostId)}`,
       {
@@ -1654,6 +1661,7 @@ export const relayApi = {
   openRemoteWorkspaceInEditor: async (
     payload: OpenRemoteWorkspaceInEditorRequest
   ): Promise<OpenRemoteEditorResponse> => {
+    assertRelayAvailable();
     const response = await makeRequest('/api/open-remote-editor/workspace', {
       method: 'POST',
       body: JSON.stringify(payload),

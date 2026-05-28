@@ -56,6 +56,7 @@ import {
 import { getRandomPresetColor, PRESET_COLORS } from '@/shared/lib/colors';
 import { InlineColorPicker } from '@vibe/ui/components/ColorPicker';
 import { cn } from '@/shared/lib/utils';
+import { safeUUID } from '@/shared/lib/uuid';
 import {
   SettingsCard,
   SettingsField,
@@ -716,7 +717,7 @@ export function RemoteProjectsSettingsSection({
   }, []);
 
   const handleStatusAdd = useCallback(() => {
-    const newId = crypto.randomUUID();
+    const newId = safeUUID();
     const maxSortOrder = localStatuses.reduce(
       (max, status) => Math.max(max, status.sort_order),
       0

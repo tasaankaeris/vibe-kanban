@@ -1,4 +1,5 @@
 import type { RelaySigningSessionRefreshPayload } from '@/shared/lib/relayBackendApi';
+import { safeUUID } from '@/shared/lib/uuid';
 
 const TEXT_ENCODER = new TextEncoder();
 
@@ -15,7 +16,7 @@ export async function buildRelaySigningSessionRefreshPayload(
   privateKeyJwk: JsonWebKey
 ): Promise<RelaySigningSessionRefreshPayload> {
   const timestamp = Math.floor(Date.now() / 1000);
-  const nonce = crypto.randomUUID();
+  const nonce = safeUUID();
   const message = buildRelaySigningSessionRefreshMessage(
     timestamp,
     nonce,

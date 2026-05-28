@@ -5,6 +5,7 @@ import { useCurrentKanbanRouteState } from '@/shared/hooks/useCurrentKanbanRoute
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
 import type { CreateModeInitialState } from '@/shared/types/createMode';
 import { persistWorkspaceCreateDraft } from '@/shared/lib/workspaceCreateState';
+import { safeUUID } from '@/shared/lib/uuid';
 
 export function useProjectWorkspaceCreateDraft() {
   const { projectId } = useProjectContext();
@@ -21,7 +22,7 @@ export function useProjectWorkspaceCreateDraft() {
 
       const draftId = await persistWorkspaceCreateDraft(
         initialState,
-        crypto.randomUUID(),
+        safeUUID(),
         runtime
       );
       if (!draftId) {

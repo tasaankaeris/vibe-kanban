@@ -24,6 +24,10 @@ import {
   useRemovePairedRelayHostMutation,
 } from './useRelayRemoteHostMutations';
 import { createRelayClientIdentity } from '@/shared/lib/relayClientIdentity';
+import {
+  isRelayAvailable,
+  RELAY_REQUIRES_SECURE_CONTEXT_MESSAGE,
+} from '@/shared/lib/relayCapability';
 
 export function RemoteCloudHostsSettingsCardContent({
   initialHostId,
@@ -45,9 +49,11 @@ export function RemoteCloudHostsSettingsCardContent({
   const [removingHostId, setRemovingHostId] = useState<string | null>(null);
   const hasAppliedInitialHostRef = useRef(false);
   const { machineId } = useUserSystem();
+  const relayAvailable = isRelayAvailable();
 
   const { data: relayHosts = [], isLoading: relayHostsLoading } = useQuery({
     ...useRelayRemoteHostsQuery(),
+    enabled: relayAvailable,
   });
   const isRemoteMode = mode === 'remote';
   const { data: localData, isLoading: localStateLoading } =
@@ -55,7 +61,7 @@ export function RemoteCloudHostsSettingsCardContent({
   const { data: remotePairedHosts = [], isLoading: remotePairedHostsLoading } =
     useQuery({
       ...useRelayRemotePairedHostsQuery(),
-      enabled: isRemoteMode,
+      enabled: relayAvailable && isRemoteMode,
     });
   const { mutateAsync: pairLocalHost, isPending: isPairingLocal } =
     usePairRemoteCloudHostMutation();
@@ -153,6 +159,7 @@ export function RemoteCloudHostsSettingsCardContent({
   const isRemoving = isRemoteMode ? isRemovingRemote : isRemovingLocal;
 
   const canSubmitPairing =
+    relayAvailable &&
     !!selectedHostId &&
     normalizeEnrollmentCode(pairingCode).length === 6 &&
     !isPairing;
@@ -264,6 +271,12 @@ export function RemoteCloudHostsSettingsCardContent({
 
   return (
     <div className="space-y-4">
+      {!relayAvailable && (
+        <div className="bg-secondary/40 border border-border rounded-sm p-3 text-sm text-low">
+          {RELAY_REQUIRES_SECURE_CONTEXT_MESSAGE}
+        </div>
+      )}
+
       {successMessage && (
         <div className="bg-success/10 border border-success/50 rounded-sm p-3 text-success text-sm">
           {successMessage}
@@ -291,7 +304,9 @@ export function RemoteCloudHostsSettingsCardContent({
                 ? 'No hosts available'
                 : 'Select a host'
           )}
-          disabled={relayHostsLoading || relayHostOptions.length === 0}
+          disabled={
+            !relayAvailable || relayHostsLoading || relayHostOptions.length === 0
+          }
         />
       </SettingsField>
 
@@ -304,7 +319,7 @@ export function RemoteCloudHostsSettingsCardContent({
         </p>
       )}
 
-      {selectedHostId && (
+      {selectedHostId && relayAvailable && (
         <>
           <SettingsField
             label={t(

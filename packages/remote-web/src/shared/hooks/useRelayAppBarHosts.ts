@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { AppBarHost } from "@vibe/ui/components/AppBar";
 import type { RelayHost } from "shared/remote-types";
+import { isRelayAvailable } from "@/shared/lib/relayCapability";
 import { listPairedRelayHosts } from "@/shared/lib/relayPairingStorage";
 import { listRelayHosts } from "@/shared/lib/remoteApi";
 
@@ -51,12 +52,15 @@ function mapRelayHostStatus(
 export function useRelayAppBarHosts(
   enabled: boolean,
 ): UseRelayAppBarHostsResult {
+  const relayAvailable = isRelayAvailable();
+  const queryEnabled = enabled && relayAvailable;
+
   const hostsQuery = useQuery({
     queryKey: RELAY_APP_BAR_HOSTS_QUERY_KEY,
     queryFn: listRelayHosts,
-    enabled,
+    enabled: queryEnabled,
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    refetchInterval: queryEnabled ? 30_000 : false,
   });
 
   const pairedHostsQuery = useQuery({
@@ -69,13 +73,13 @@ export function useRelayAppBarHosts(
         return [];
       }
     },
-    enabled,
+    enabled: queryEnabled,
     staleTime: 5_000,
-    refetchInterval: 5_000,
+    refetchInterval: queryEnabled ? 5_000 : false,
   });
 
   const hosts = useMemo<AppBarHost[]>(() => {
-    if (!enabled) {
+    if (!queryEnabled) {
       return [];
     }
 
@@ -89,10 +93,11 @@ export function useRelayAppBarHosts(
       name: host.name,
       status: mapRelayHostStatus(host, pairedHostIds),
     }));
-  }, [enabled, hostsQuery.data, pairedHostsQuery.data]);
+  }, [queryEnabled, hostsQuery.data, pairedHostsQuery.data]);
 
   return {
     hosts,
-    isLoading: enabled && (hostsQuery.isLoading || pairedHostsQuery.isLoading),
+    isLoading:
+      queryEnabled && (hostsQuery.isLoading || pairedHostsQuery.isLoading),
   };
 }

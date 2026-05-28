@@ -1,0 +1,72 @@
+name: Pre-release on tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag (e.g. v0.1.43-fork.1-20260417125614)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: 22
+  PNPM_VERSION: 10.13.1
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify semver tag
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag '$TAG' is not valid semver (expected vMAJOR.MINOR.PATCH[-prerelease])"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend dist
+        run: pnpm -C packages/local-web build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Package dist artifact
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          ARCHIVE="vibe-kanban-${TAG}-dist.zip"
+          mkdir -p "release-assets/vibe-kanban-${TAG}"
+          cp -r packages/local-web/dist "release-assets/vibe-kanban-${TAG}/"
+          (cd release-assets && zip -r "../${ARCHIVE}" "vibe-kanban-${TAG}")
+          echo "archive=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Pre-release ${{ steps.tag.outputs.name }}
+          prerelease: true
+          generate_release_notes: true
+          files: ${{ env.archive }}

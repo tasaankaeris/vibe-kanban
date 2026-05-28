@@ -130,6 +130,16 @@ The following environment variables can be configured at build time or runtime:
 
 **Build-time variables** must be set when running `pnpm run build`. **Runtime variables** are read when the application starts.
 
+#### HTTP vs HTTPS Relay Behavior
+
+When running the web app over plain HTTP (non-secure context), relay features are intentionally disabled.
+Relay actions and relay transport calls require a secure context and will return:
+
+- Code: `RELAY_REQUIRES_SECURE_CONTEXT`
+- Message: `Relay is unavailable on HTTP. Use HTTPS to enable relay features.`
+
+Authentication entry points remain enabled on HTTP, but relay-based host pairing/tunnel flows require HTTPS.
+
 #### Self-Hosting with a Reverse Proxy or Custom Domain
 
 When running Vibe Kanban behind a reverse proxy (e.g., nginx, Caddy, Traefik) or on a custom domain, you must set the `VK_ALLOWED_ORIGINS` environment variable. Without this, the browser's Origin header won't match the backend's expected host, and API requests will be rejected with a 403 Forbidden error.

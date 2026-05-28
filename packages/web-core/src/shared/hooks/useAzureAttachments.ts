@@ -9,6 +9,7 @@ import {
   uploadToAzure,
 } from '@/shared/lib/remoteApi';
 import { buildAttachmentMarkdown } from '@/shared/lib/workspaceAttachments';
+import { safeUUID } from '@/shared/lib/uuid';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,17 +74,6 @@ type PendingAttachmentLocal = {
   markdown: string;
   file: File;
 };
-
-function createPendingAttachmentId(): string {
-  if (
-    typeof crypto !== 'undefined' &&
-    typeof crypto.randomUUID === 'function'
-  ) {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 
 function inferFormat(file: File): string {
   const extension = file.name.split('.').pop()?.trim();
@@ -182,7 +172,7 @@ export function useAzureAttachments({
       setIsUploading(true);
 
       const pendingLocals: PendingAttachmentLocal[] = validFiles.map((file) => {
-        const pendingId = createPendingAttachmentId();
+        const pendingId = safeUUID();
         const tempSrc = `${PENDING_ATTACHMENT_PREFIX}${pendingId}`;
         const objectUrl = URL.createObjectURL(file);
         localObjectsRef.current.set(tempSrc, objectUrl);

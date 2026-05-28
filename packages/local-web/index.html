@@ -18,32 +18,44 @@
 <body>
     <div id="root"></div>
     <script>
-      // Polyfill crypto.randomUUID for non-secure contexts (e.g. HTTP access
-      // via LAN IP). Required because @tanstack/db calls crypto.randomUUID()
-      // directly without a fallback.
+      // Polyfill crypto.randomUUID when native API is missing (e.g. HTTP via LAN IP).
+      // Semantics match packages/web-core/src/shared/lib/uuid.ts uuidV4ForHttp().
+      // Required because @tanstack/db calls crypto.randomUUID() directly.
       // See: https://github.com/TanStack/db/issues/784
-      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
-        crypto.randomUUID = function () {
-          var bytes = new Uint8Array(16);
-          if (typeof crypto.getRandomValues === 'function') {
-            crypto.getRandomValues(bytes);
-          } else {
-            for (var i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+      (function () {
+        try {
+          var cryptoObj = globalThis.crypto;
+          if (!cryptoObj || typeof cryptoObj.randomUUID === 'function') {
+            return;
           }
-          // Set RFC 4122 v4 version and variant bits
-          bytes[6] = (bytes[6] & 0x0f) | 0x40;
-          bytes[8] = (bytes[8] & 0x3f) | 0x80;
-          var h = [];
-          for (var j = 0; j < 16; j++) h.push(bytes[j].toString(16).padStart(2, '0'));
-          return (
-            h[0] + h[1] + h[2] + h[3] + '-' +
-            h[4] + h[5] + '-' +
-            h[6] + h[7] + '-' +
-            h[8] + h[9] + '-' +
-            h[10] + h[11] + h[12] + h[13] + h[14] + h[15]
-          );
-        };
-      }
+          cryptoObj.randomUUID = function () {
+            var bytes = new Uint8Array(16);
+            var c = globalThis.crypto;
+            if (c && typeof c.getRandomValues === 'function') {
+              c.getRandomValues(bytes);
+            } else {
+              for (var i = 0; i < 16; i++) {
+                bytes[i] = Math.floor(Math.random() * 256);
+              }
+            }
+            bytes[6] = (bytes[6] & 0x0f) | 0x40;
+            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+            var hex = [];
+            for (var j = 0; j < 16; j++) {
+              hex.push(bytes[j].toString(16).padStart(2, '0'));
+            }
+            return (
+              hex[0] + hex[1] + hex[2] + hex[3] + '-' +
+              hex[4] + hex[5] + '-' +
+              hex[6] + hex[7] + '-' +
+              hex[8] + hex[9] + '-' +
+              hex[10] + hex[11] + hex[12] + hex[13] + hex[14] + hex[15]
+            );
+          };
+        } catch (_) {
+          // Polyfill must never break page load when crypto is unavailable.
+        }
+      })();
     </script>
     <script type="module" src="/src/app/entry/Bootstrap.tsx"></script>
 </body>

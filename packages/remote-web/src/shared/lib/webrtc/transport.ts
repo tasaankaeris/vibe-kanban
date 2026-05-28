@@ -14,6 +14,7 @@ import type {
   LocalApiRequestOptions,
   LocalApiWebSocketOptions,
 } from "@/shared/lib/localApiTransport";
+import { assertRelayAvailable } from "@/shared/lib/relayCapability";
 import { getWebRtcConnection } from "./connectionManager";
 import { createDataChannelWebSocket } from "./dataChannelWebSocket";
 
@@ -46,6 +47,8 @@ export async function requestLocalApiViaWebRtc(
   if (!shouldRelayApiPath(pathAndQuery)) {
     return fetch(pathOrUrl, requestInit);
   }
+
+  assertRelayAvailable();
 
   const hostId = resolveHostId(requestInit);
   if (!hostId) {
@@ -109,6 +112,8 @@ export async function openLocalApiWebSocketViaWebRtc(
   if (!shouldRelayApiPath(pathAndQuery)) {
     return new WebSocket(normalizeWebSocketUrl(pathOrUrl));
   }
+
+  assertRelayAvailable();
 
   const hostId = resolveHostId(options);
   if (!hostId) {

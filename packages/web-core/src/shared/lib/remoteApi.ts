@@ -13,6 +13,7 @@ import type {
   UpdateProjectStatusRequest,
 } from 'shared/remote-types';
 import { getAuthRuntime } from '@/shared/lib/auth/runtime';
+import { assertRelayAvailable } from '@/shared/lib/relayCapability';
 import { syncRelayApiBaseWithRemote } from '@/shared/lib/relayBackendApi';
 
 const BUILD_TIME_API_BASE = import.meta.env.VITE_VK_SHARED_API_BASE || '';
@@ -162,6 +163,7 @@ export async function bulkUpdateProjectStatuses(
 // ---------------------------------------------------------------------------
 
 export async function listRelayHosts(): Promise<RelayHost[]> {
+  assertRelayAvailable();
   const response = await makeRequest('/v1/hosts', { method: 'GET' });
   if (!response.ok) {
     throw await parseErrorResponse(response, 'Failed to list relay hosts');
