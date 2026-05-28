@@ -95,6 +95,7 @@ COPY crates/workspace-manager/Cargo.toml crates/workspace-manager/Cargo.toml
 COPY crates/worktree-manager/Cargo.toml crates/worktree-manager/Cargo.toml
 COPY crates/ws-bridge/Cargo.toml crates/ws-bridge/Cargo.toml
 
+COPY crates/ crates/
 COPY crates/api-types/ crates/api-types/
 COPY crates/client-info/ crates/client-info/
 COPY crates/db/ crates/db/
