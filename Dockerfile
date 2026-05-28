@@ -38,8 +38,7 @@ FROM rust:1.93-slim-bookworm AS builder
 ARG POSTHOG_API_KEY=""
 ARG POSTHOG_API_ENDPOINT=""
 ARG SENTRY_DSN=""
-# Leave unset at build time for self-hosted images; set at runtime via compose instead.
-ARG VK_SHARED_API_BASE
+ARG VK_SHARED_API_BASE=""
 
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -47,6 +46,7 @@ ENV CARGO_TARGET_DIR=/app/target
 ENV POSTHOG_API_KEY=${POSTHOG_API_KEY}
 ENV POSTHOG_API_ENDPOINT=${POSTHOG_API_ENDPOINT}
 ENV SENTRY_DSN=${SENTRY_DSN}
+ENV VK_SHARED_API_BASE=${VK_SHARED_API_BASE}
 
 WORKDIR /app
 
@@ -131,7 +131,7 @@ COPY --from=fe-builder /app/packages/local-web/dist packages/local-web/dist
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=workspace-target,target=/app/target \
-    sh -ec 'if [ -n "${VK_SHARED_API_BASE:-}" ]; then export VK_SHARED_API_BASE; else unset VK_SHARED_API_BASE; fi; cargo build --locked --release --bin server' \
+    cargo build --locked --release --bin server \
  && cp /app/target/release/server /usr/local/bin/server
 
 FROM debian:bookworm-slim AS runtime
