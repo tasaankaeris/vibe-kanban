@@ -1,0 +1,132 @@
+# Fork pre-releases: tags look like upstream (version + UTC timestamp) but the
+# version is a fork patch (e.g. 0.1.43-fork.1), not an upstream v0.1.43 release.
+name: Create pre-release tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'tag_only = stamp current fork version; fork_patch = bump fork.N then tag'
+        required: true
+        default: tag_only
+        type: choice
+        options:
+          - tag_only
+          - fork_patch
+
+concurrency:
+  group: pre-release-tag-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Install cargo-edit
+        if: inputs.action == 'fork_patch'
+        uses: taiki-e/cache-cargo-install-action@34ce5120836e5f9f1508d8713d7fdea0e8facd6f # v3.0.1
+        with:
+          tool: cargo-edit
+          git: https://github.com/killercup/cargo-edit
+          rev: 96a3879fe3bafda6d0f943b642997fbf03e235cd # v0.13.9
+
+      - name: Read fork version metadata
+        id: fork
+        run: |
+          set -euo pipefail
+          upstream_base=$(node -p "require('./fork-version.json').upstreamBase")
+          fork_preid=$(node -p "require('./fork-version.json').forkPreid")
+          current=$(node -p "require('./package.json').version")
+          echo "upstream_base=$upstream_base" >> "$GITHUB_OUTPUT"
+          echo "fork_preid=$fork_preid" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "Upstream base: $upstream_base (not our release version)"
+          echo "Current fork version: $current"
+
+      - name: Determine version and tag name
+        id: version
+        env:
+          UPSTREAM_BASE: ${{ steps.fork.outputs.upstream_base }}
+          FORK_PREID: ${{ steps.fork.outputs.fork_preid }}
+          CURRENT: ${{ steps.fork.outputs.current }}
+        run: |
+          set -euo pipefail
+          timestamp=$(date -u +%Y%m%d%H%M%S)
+          upstream_base="${{ steps.fork.outputs.upstream_base }}"
+          fork_preid="${{ steps.fork.outputs.fork_preid }}"
+          action="${{ inputs.action }}"
+
+          if [[ "$action" == "fork_patch" ]]; then
+            node -e "
+              const upstream = process.env.UPSTREAM_BASE;
+              const preid = process.env.FORK_PREID;
+              const current = process.env.CURRENT;
+              const forkPrefix = upstream + '-' + preid + '.';
+              if (current !== upstream && !current.startsWith(forkPrefix)) {
+                console.error('package.json version ' + current + ' is not on fork line ' + upstream + '-' + preid + '.N');
+                process.exit(1);
+              }
+            "
+            npm version prerelease --preid="$fork_preid" --no-git-tag-version
+          fi
+
+          new_version=$(node -p "require('./package.json').version")
+          if [[ "$new_version" == "$upstream_base" ]]; then
+            echo "Refusing to tag bare upstream version $upstream_base; run fork_patch or set ${upstream_base}-${fork_preid}.N in package.json"
+            exit 1
+          fi
+
+          new_tag="v${new_version}-${timestamp}"
+          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "new_tag=$new_tag" >> "$GITHUB_OUTPUT"
+          echo "Tag: $new_tag (fork patch on upstream $upstream_base)"
+
+      - name: Bump workspace versions
+        if: inputs.action == 'fork_patch'
+        run: |
+          new_version="${{ steps.version.outputs.new_version }}"
+          (
+            cd npx-cli
+            npm version "$new_version" --no-git-tag-version --allow-same-version
+          )
+          (
+            cd packages/local-web
+            npm version "$new_version" --no-git-tag-version --allow-same-version
+          )
+          cargo set-version --workspace "$new_version"
+          node -e "
+            const fs = require('fs');
+            const path = 'crates/tauri-app/tauri.conf.json';
+            const conf = JSON.parse(fs.readFileSync(path, 'utf8'));
+            conf.version = '$new_version';
+            fs.writeFileSync(path, JSON.stringify(conf, null, 2) + '\n');
+          "
+
+      - name: Commit, tag, and push
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          new_tag="${{ steps.version.outputs.new_tag }}"
+
+          if [[ "${{ inputs.action }}" == "tag_only" ]]; then
+            git tag -a "$new_tag" -m "Fork pre-release $new_tag"
+          else
+            git add package.json pnpm-lock.yaml npx-cli/package.json packages/local-web/package.json
+            git add crates/tauri-app/tauri.conf.json Cargo.lock fork-version.json
+            git add $(find . -name Cargo.toml)
+            git commit -m "chore: bump fork version to ${{ steps.version.outputs.new_version }}"
+            git tag -a "$new_tag" -m "Fork pre-release $new_tag"
+          fi
+
+          git push origin HEAD
+          git push origin "$new_tag"
