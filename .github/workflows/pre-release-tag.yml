@@ -24,7 +24,7 @@ on:
 
 concurrency:
   group: pre-release-tag-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -158,6 +158,10 @@ jobs:
             fi
           else
             tag="${{ steps.version.outputs.new_tag }}"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-fork\.[0-9]+-[0-9]{14}$ ]]; then
+            echo "Tag must match v<semver>-fork.<N>-<UTC timestamp>, got: $tag" >&2
+            exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Release tag: $tag"

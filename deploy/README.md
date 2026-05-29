@@ -19,15 +19,7 @@ GHCR images are **only** pushed when a `v*` **git tag** exists (via **Actions �
 
 To rebuild an existing tag without a new commit: **Create pre-release tag** → `publish_existing` with that tag name.
 
-Each publish creates **exactly one** image tag per package, named like the git tag (e.g. `v0.1.43-fork.1-20260528220210`). No `latest`, branch, or commit-SHA tags.
-
-### Clean up old junk versions
-
-Earlier CI pushed branch/SHA/`latest` images. To remove them:
-
-1. **Actions → GHCR prune package versions** → run with **dry_run: true** first.
-2. Review the log, then run again with **dry_run: false**.
-3. Optional: delete remaining versions you do not need in [vibe-kanban versions](https://github.com/tasaankaeris/vibe-kanban/pkgs/container/vibe-kanban/versions) / [vibe-kanban-cloud versions](https://github.com/tasaankaeris/vibe-kanban/pkgs/container/vibe-kanban-cloud/versions).
+Each publish creates **exactly one** image tag per package, named like the git tag (e.g. `v0.1.43-fork.1-20260529072200`). No `latest`, branch, or commit-SHA tags.
 
 ## How it works locally (no Bloop SaaS)
 
