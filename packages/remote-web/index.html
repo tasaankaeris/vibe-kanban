@@ -9,6 +9,8 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Must load before Bootstrap: @tanstack/db calls crypto.randomUUID() on insert -->
+    <script type="module" src="/src/app/entry/cryptoPolyfill.ts"></script>
     <script type="module" src="/src/app/entry/Bootstrap.tsx"></script>
   </body>
 </html>
