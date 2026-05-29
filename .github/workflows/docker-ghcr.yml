@@ -1,6 +1,5 @@
-# Publishes to GHCR only on version git tags (v*). PRs build without push to avoid
-# storage charges from branch/SHA images. After Create pre-release tag, use
-# publish_existing or rely on gh workflow run docker-ghcr.yml --ref <tag>.
+# One GHCR tag per git tag: ghcr.io/<owner>/<image>:<git-tag>
+# No branch, sha, latest, or semver-alias tags. PRs build without push.
 name: Docker GHCR
 
 on:
@@ -61,8 +60,11 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            echo "GHCR publish only runs on git tags matching v* (e.g. v0.1.43-fork.1-20260528180301)." >&2
-            echo "Create a tag via Create pre-release tag, or run this workflow with --ref <tag>." >&2
+            echo "GHCR publish only runs on git tags matching v*." >&2
+            exit 1
+          fi
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-fork\.[0-9]+-[0-9]{14}$ ]]; then
+            echo "Tag must match v<semver>-fork.<N>-<UTC timestamp>, got: ${GITHUB_REF_NAME}" >&2
             exit 1
           fi
 
@@ -77,24 +79,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
-        if: github.event_name != 'pull_request'
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
-          tags: |
-            type=ref,event=tag
-
       - name: Build and push Docker image
+        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.ref_name }}
           build-args: ${{ matrix.build-args }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=${{ matrix.id }}
           cache-to: type=gha,mode=max,scope=${{ matrix.id }}
 
@@ -106,5 +101,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: false
           build-args: ${{ matrix.build-args }}
+          provenance: false
+          sbom: false
           cache-from: type=gha,scope=${{ matrix.id }}
           cache-to: type=gha,mode=max,scope=${{ matrix.id }}
