@@ -1,0 +1,79 @@
+# Delete GHCR versions that are not a fork pre-release git tag (and untagged manifests).
+# Run manually after fixing docker-ghcr.yml to clear branch/sha/latest junk.
+name: GHCR prune package versions
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List versions to delete without deleting (recommended first run)'
+        type: boolean
+        default: true
+      package:
+        description: 'Which package to prune'
+        type: choice
+        options:
+          - both
+          - vibe-kanban
+          - vibe-kanban-cloud
+        default: both
+
+permissions:
+  packages: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prune invalid GHCR versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PACKAGE_INPUT: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          # Fork pre-release tags: v0.1.43-fork.1-20260528220210
+          keep_re='^v[0-9]+\.[0-9]+\.[0-9]+-fork\.[0-9]+-[0-9]{14}$'
+
+          packages=()
+          case "$PACKAGE_INPUT" in
+            both) packages=(vibe-kanban vibe-kanban-cloud) ;;
+            *) packages=("$PACKAGE_INPUT") ;;
+          esac
+
+          for pkg in "${packages[@]}"; do
+            echo "=== $pkg ==="
+            mapfile -t rows < <(
+              gh api --paginate "users/${OWNER}/packages/container/${pkg}/versions" \
+                --jq '.[] | [.id, ([.metadata.container.tags[]?] | join(","))] | @tsv'
+            )
+
+            for row in "${rows[@]}"; do
+              id="${row%%$'\t'*}"
+              tags="${row#*$'\t'}"
+
+              keep=false
+              if [[ -n "$tags" ]]; then
+                IFS=',' read -ra tag_list <<< "$tags"
+                for t in "${tag_list[@]}"; do
+                  if [[ "$t" =~ $keep_re ]]; then
+                    keep=true
+                    break
+                  fi
+                done
+              fi
+
+              if [[ "$keep" == true ]]; then
+                echo "KEEP id=$id tags=$tags"
+                continue
+              fi
+
+              if [[ "$DRY_RUN" == true ]]; then
+                echo "DELETE (dry-run) id=$id tags=${tags:-<untagged>}"
+              else
+                echo "DELETE id=$id tags=${tags:-<untagged>}"
+                gh api --method DELETE "users/${OWNER}/packages/container/${pkg}/versions/${id}"
+              fi
+            done
+          done
