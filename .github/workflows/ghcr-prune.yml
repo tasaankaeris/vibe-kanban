@@ -55,10 +55,11 @@ jobs:
 
               keep=false
               if [[ -n "$tags" ]]; then
+                keep=true
                 IFS=',' read -ra tag_list <<< "$tags"
                 for t in "${tag_list[@]}"; do
-                  if [[ "$t" =~ $keep_re ]]; then
-                    keep=true
+                  if [[ ! "$t" =~ $keep_re ]]; then
+                    keep=false
                     break
                   fi
                 done
