@@ -1,0 +1,53 @@
+# PR guardrail: release pipeline policy must not regress (see docs/fork-release-pipeline.md).
+name: Verify release workflows
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-ghcr.yml'
+      - '.github/workflows/pre-release-tag.yml'
+      - '.github/workflows/release-on-tag.yml'
+      - 'docs/fork-release-pipeline.md'
+
+jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Assert docker-ghcr publish policy
+        run: |
+          set -euo pipefail
+          f=.github/workflows/docker-ghcr.yml
+          if grep -q 'metadata-action' "$f"; then
+            echo "::error::docker-ghcr must not use docker/metadata-action"
+            exit 1
+          fi
+          if grep -A6 '^  push:' "$f" | grep -q 'branches:'; then
+            echo "::error::docker-ghcr must not publish on branch push"
+            exit 1
+          fi
+          grep -q 'github.ref_name' "$f" || {
+            echo "::error::docker-ghcr must tag images with github.ref_name"
+            exit 1
+          }
+
+      - name: Assert pre-release-tag push rules
+        run: |
+          set -euo pipefail
+          f=.github/workflows/pre-release-tag.yml
+          grep -q 'refs/tags/\${new_tag}' "$f" || {
+            echo "::error::pre-release-tag must push refs/tags explicitly"
+            exit 1
+          }
+          branch_pushes=$(grep -c 'git push origin "HEAD:' "$f" || true)
+          if [[ "$branch_pushes" -ne 1 ]]; then
+            echo "::error::expected exactly one branch push (fork_patch only), found ${branch_pushes}"
+            exit 1
+          fi
+          if grep -q 'git pull --rebase origin' "$f"; then
+            echo "fork_patch rebases before push"
+          else
+            echo "::error::fork_patch must git pull --rebase before push"
+            exit 1
+          fi

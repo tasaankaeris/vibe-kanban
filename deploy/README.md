@@ -9,25 +9,17 @@ Two images are published to GHCR:
 
 This is **not** Bloop’s hosted cloud. Nothing is sent to `vibekanban.com` unless you configure that yourself.
 
-## Publishing images (tag only)
+## Publishing images
 
-GHCR images are **only** pushed when a `v*` **git tag** exists (via **Actions → Create pre-release tag**, or a manual tag push that triggers CI). Branch merges and PRs build in CI but do **not** publish to GHCR.
+Full design and evidence chain: [docs/fork-release-pipeline.md](../docs/fork-release-pipeline.md).
 
-1. Run **Create pre-release tag** (`tag_only` or `fork_patch`) on `release/…` — this creates e.g. `v0.1.43-fork.1-20260528180301` and starts **Docker GHCR** on that tag.
-2. Set `IMAGE_TAG` in `deploy/.env` to that **exact tag name** (without `ghcr.io/…` prefix).
-3. `docker compose … pull` then `up`.
+1. **Actions → Create pre-release tag** on `release/v0.1.43` (`tag_only` or `fork_patch`).
+2. When the workflow succeeds, copy **`IMAGE_TAG`** from the job summary into `deploy/.env`.
+3. `docker compose --env-file deploy/.env -f deploy/docker-compose.ghcr.yml pull && … up -d`.
 
-To rebuild an existing tag without a new commit: **Create pre-release tag** → `publish_existing` with that tag name.
+Rebuild an existing tag: **Create pre-release tag** → `publish_existing` + `existing_tag`.
 
-Each publish creates **exactly one** image tag per package, named like the git tag (e.g. `v0.1.43-fork.1-20260528220210`). No `latest`, branch, or commit-SHA tags.
-
-### Clean up old junk versions
-
-Earlier CI pushed branch/SHA/`latest` images. To remove them:
-
-1. **Actions → GHCR prune package versions** → run with **dry_run: true** first.
-2. Review the log, then run again with **dry_run: false**.
-3. Optional: delete remaining versions you do not need in [vibe-kanban versions](https://github.com/tasaankaeris/vibe-kanban/pkgs/container/vibe-kanban/versions) / [vibe-kanban-cloud versions](https://github.com/tasaankaeris/vibe-kanban/pkgs/container/vibe-kanban-cloud/versions).
+One GHCR tag per image, identical to the git tag (no `latest`, branch, or SHA tags). Legacy junk: optional **GHCR prune package versions** (see design doc).
 
 ## How it works locally (no Bloop SaaS)
 
