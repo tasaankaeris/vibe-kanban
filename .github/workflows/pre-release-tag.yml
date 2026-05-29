@@ -24,7 +24,7 @@ on:
 
 concurrency:
   group: pre-release-tag-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -126,22 +126,25 @@ jobs:
       - name: Commit, tag, and push
         if: inputs.action != 'publish_existing'
         run: |
+          set -euo pipefail
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           new_tag="${{ steps.version.outputs.new_tag }}"
+          branch="${GITHUB_REF_NAME}"
 
           if [[ "${{ inputs.action }}" == "tag_only" ]]; then
             git tag -a "$new_tag" -m "Fork pre-release $new_tag"
+            git push origin "refs/tags/${new_tag}"
           else
+            git pull --rebase origin "$branch"
             git add package.json pnpm-lock.yaml npx-cli/package.json packages/local-web/package.json
             git add crates/tauri-app/tauri.conf.json Cargo.lock fork-version.json
             git add $(find . -name Cargo.toml)
             git commit -m "chore: bump fork version to ${{ steps.version.outputs.new_version }}"
             git tag -a "$new_tag" -m "Fork pre-release $new_tag"
+            git push origin "HEAD:${branch}"
+            git push origin "refs/tags/${new_tag}"
           fi
-
-          git push origin HEAD
-          git push origin "$new_tag"
 
       - name: Resolve release tag
         id: release
@@ -155,6 +158,10 @@ jobs:
             fi
           else
             tag="${{ steps.version.outputs.new_tag }}"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-fork\.[0-9]+-[0-9]{14}$ ]]; then
+            echo "Tag must match v<semver>-fork.<N>-<UTC timestamp>, got: $tag" >&2
+            exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Release tag: $tag"

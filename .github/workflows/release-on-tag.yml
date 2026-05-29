@@ -34,11 +34,11 @@ jobs:
             echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Verify semver tag
+      - name: Verify fork pre-release tag
         run: |
           TAG="${{ steps.tag.outputs.name }}"
-          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag '$TAG' is not valid semver (expected vMAJOR.MINOR.PATCH[-prerelease])"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-fork\.[0-9]+-[0-9]{14}$ ]]; then
+            echo "Tag must match v<semver>-fork.<N>-<UTC timestamp> (same as docker-ghcr), got: $TAG" >&2
             exit 1
           fi
 
