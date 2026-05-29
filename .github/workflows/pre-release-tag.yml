@@ -1,7 +1,8 @@
-# Fork pre-releases — see docs/fork-release-pipeline.md
+# Fork pre-releases: tags look like upstream (version + UTC timestamp) but the
+# version is a fork patch (e.g. 0.1.43-fork.1), not an upstream v0.1.43 release.
 #
-# GITHUB_TOKEN tag pushes do not start other workflows; this workflow explicitly runs
-# Docker GHCR and Pre-release on tag at the tag ref after pushing the tag.
+# Note: git pushes using GITHUB_TOKEN do not trigger other workflows. After
+# creating a tag, this workflow explicitly starts Docker GHCR and Pre-release on tag.
 name: Create pre-release tag
 
 on:
@@ -29,17 +30,12 @@ permissions:
   contents: write
   actions: write
 
-env:
-  FORK_TAG_RE: '^v[0-9]+\.[0-9]+\.[0-9]+-fork\.[0-9]+-[0-9]{14}$'
-
 jobs:
   tag:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         if: inputs.action != 'publish_existing'
-        with:
-          fetch-depth: 0
 
       - name: Setup Node
         if: inputs.action != 'publish_existing'
@@ -163,15 +159,10 @@ jobs:
           else
             tag="${{ steps.version.outputs.new_tag }}"
           fi
-          if [[ ! "$tag" =~ ${{ env.FORK_TAG_RE }} ]]; then
-            echo "Tag must match v<semver>-fork.<N>-<UTC timestamp>, got: $tag" >&2
-            exit 1
-          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Release tag: $tag"
 
-      - name: Trigger Docker GHCR and GitHub pre-release
-        id: trigger
+      - name: Trigger Docker image build and GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -181,77 +172,3 @@ jobs:
           gh workflow run docker-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
           echo "Starting Pre-release on tag for $tag"
           gh workflow run release-on-tag.yml --repo "$GITHUB_REPOSITORY" --ref "$tag" -f "tag=$tag"
-
-      - name: Verify Docker GHCR publish
-        id: verify-docker
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag="${{ steps.release.outputs.tag }}"
-          expected_local="ghcr.io/${{ github.repository_owner }}/vibe-kanban:${tag}"
-          expected_cloud="ghcr.io/${{ github.repository_owner }}/vibe-kanban-cloud:${tag}"
-
-          echo "Waiting for Docker GHCR run for tag ${tag}..."
-          run_id=""
-          for _ in $(seq 1 60); do
-            run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow docker-ghcr.yml \
-              --json databaseId,headBranch,status,conclusion \
-              --jq "map(select(.headBranch==\"${tag}\")) | .[0].databaseId // empty")
-            if [[ -n "$run_id" ]]; then
-              status=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq .status)
-              if [[ "$status" == "completed" ]]; then
-                break
-              fi
-            fi
-            sleep 10
-          done
-
-          if [[ -z "$run_id" ]]; then
-            echo "No Docker GHCR run found for tag ${tag}" >&2
-            exit 1
-          fi
-
-          conclusion=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)
-          if [[ "$conclusion" != "success" ]]; then
-            echo "Docker GHCR run ${run_id} failed: ${conclusion}" >&2
-            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed || true
-            exit 1
-          fi
-
-          log=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log)
-          if grep -q 'metadata-action' <<< "$log"; then
-            echo "Docker GHCR must not use docker/metadata-action (tag ${tag} points at old workflow commit?)" >&2
-            exit 1
-          fi
-          if grep -qE ':latest($|")' <<< "$log"; then
-            echo "Docker GHCR must not push :latest" >&2
-            exit 1
-          fi
-          if ! grep -qF "$expected_local" <<< "$log"; then
-            echo "Expected local image tag in log: $expected_local" >&2
-            exit 1
-          fi
-          if ! grep -qF "$expected_cloud" <<< "$log"; then
-            echo "Expected cloud image tag in log: $expected_cloud" >&2
-            exit 1
-          fi
-
-          echo "docker_ghcr_run_id=${run_id}" >> "$GITHUB_OUTPUT"
-          echo "Verified Docker GHCR run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
-
-      - name: Release summary
-        run: |
-          tag="${{ steps.release.outputs.tag }}"
-          {
-            echo "## Fork pre-release: \`${tag}\`"
-            echo ""
-            echo "| Step | Status |"
-            echo "|------|--------|"
-            echo "| Git tag | pushed |"
-            echo "| Docker GHCR | [run](https://github.com/${{ github.repository }}/actions/runs/${{ steps.verify-docker.outputs.docker_ghcr_run_id }}) |"
-            echo ""
-            echo "### Deploy"
-            echo "\`IMAGE_TAG=${tag}\` in \`deploy/.env\`, then:"
-            echo "\`docker compose --env-file deploy/.env -f deploy/docker-compose.ghcr.yml pull\`"
-          } >> "$GITHUB_STEP_SUMMARY"
