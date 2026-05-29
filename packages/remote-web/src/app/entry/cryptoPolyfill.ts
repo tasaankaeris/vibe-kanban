@@ -1,3 +1,3 @@
-import { installCryptoRandomUUIDPolyfill } from '@/shared/lib/installCryptoRandomUUIDPolyfill';
+import { installCryptoRandomUUIDPolyfill } from "@/shared/lib/installCryptoRandomUUIDPolyfill";
 
 installCryptoRandomUUIDPolyfill();
